@@ -2,9 +2,21 @@
 
 
 #include "MainMenu.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Components/Button.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/EditableTextBox.h"
+#include "Components/TextBlock.h"
+#include "ServerRow.h"
+
+
+UMainMenu::UMainMenu(const FObjectInitializer& ObjectInitializer) : UUserWidget(ObjectInitializer)
+{
+	ConstructorHelpers::FClassFinder<UUserWidget> ServerRowBPClass(TEXT("/Game/MenuSystem/WBP_ServerRow"));
+	if (!ensure(ServerRowBPClass.Class != nullptr)) return;
+
+	ServerRowClass = ServerRowBPClass.Class;
+}
 
 void UMainMenu::SetMenuInterface(IMenuInterface* Interface)
 {
@@ -69,6 +81,10 @@ void UMainMenu::OpenJoinMenu()
 	if (!ensure(JoinButton != nullptr)) return;
 	if (!ensure(MenuSwitcher != nullptr)) return;
 	MenuSwitcher->SetActiveWidget(JoinMenu);
+	if (MenuInterface != nullptr) 
+	{
+		MenuInterface->RefreshServerList();
+	}
 }
 
 void UMainMenu::OpenMainMenu()
@@ -76,6 +92,9 @@ void UMainMenu::OpenMainMenu()
 	if (!ensure(MenuSwitcher != nullptr)) return;
 	if (!ensure(CancelJoinMenuButton != nullptr)) return;
 	MenuSwitcher->SetActiveWidget(MainMenu);
+	if (MenuInterface != nullptr) {
+		MenuInterface->RefreshServerList();
+	}
 }
 
 const FString& UMainMenu::GetIPAddress(UEditableTextBox* Field)
@@ -83,11 +102,42 @@ const FString& UMainMenu::GetIPAddress(UEditableTextBox* Field)
 	return Field->GetText().ToString();
 }
 
+void UMainMenu::SetServerList(TArray<FString> ServerNames)
+{
+	UWorld* World = this->GetWorld();
+	if (!ensure(World != nullptr)) return;
+
+	ServerList->ClearChildren();
+
+	uint32 i = 0;
+
+	for (const FString& ServerName : ServerNames)
+	{
+		UServerRow* Row = CreateWidget<UServerRow>(World, ServerRowClass);
+		if (!ensure(Row != nullptr)) return;
+		Row->ServerName->SetText(FText::FromString(ServerName));
+		Row->Setup(this, i);
+		++i;
+		ServerList->AddChild(Row);
+	}
+}
+
+void UMainMenu::SelectIndex(uint32 Index)
+{
+	SelectedIndex = Index;
+}
+
 void UMainMenu::JoinServer()
 {
-	if (MenuInterface != nullptr)
+
+	if (SelectedIndex.IsSet() && MenuInterface != nullptr)
 	{
-		if (!ensure(IPAddressField != nullptr)) return;
-		MenuInterface->Join(GetIPAddress(IPAddressField));
+		UE_LOG(LogTemp, Warning, TEXT("Selected index %d."), SelectedIndex.GetValue());
+		MenuInterface->Join(SelectedIndex.GetValue());
 	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Selected index not set."));
+	}
+
 }
